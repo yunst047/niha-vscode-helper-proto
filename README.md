@@ -7,6 +7,11 @@ audio feedback (a positive ping on a suggestion, an alert on errors).
 
 > Nihahaha~ 🩷
 
+> **Status: working learning prototype.** Built end-to-end to learn the VS Code
+> extension lifecycle; Gemini completions are proven on a live key. It is **not a
+> cost-free Copilot replacement** — see [`LEARNINGS.md`](./LEARNINGS.md) for the
+> build cycle, gotchas, and the token-cost reality.
+
 ## Features
 
 - **Ghost-text completions** as you type, via VS Code's native inline completion
@@ -20,11 +25,33 @@ audio feedback (a positive ping on a suggestion, an alert on errors).
   (toggleable, with volume control).
 - **Koyuki Dark** color theme included.
 
+## Providers — Claude or Gemini
+
+Koyuki supports two backends. Pick one with **`Koyuki: Select Provider`**:
+
+| Provider | Setting `koyuki.provider` | Default model | Cost |
+| --- | --- | --- | --- |
+| Anthropic Claude | `anthropic` | `claude-haiku-4-5` | needs API credit |
+| Google Gemini | `gemini` | `gemini-2.5-flash` | **has a free tier** (verified) |
+
+Each provider keeps its **own** key in the OS keychain. Get keys at
+<https://console.anthropic.com/> (Claude) or
+<https://aistudio.google.com/apikey> (Gemini — free).
+
+> **Gemini notes (learned the hard way):**
+> - `gemini-2.5-flash` is the verified-working free-tier default. `gemini-2.0-flash`
+>   returned `429 limit: 0` (no free-tier quota) on a test key; `gemini-1.5-flash`
+>   is `404` on `v1beta`. If you hit `429 limit: 0`, that *model* has no free quota
+>   on your key — switch `koyuki.geminiModel` to another `*-flash` model.
+> - 2.5 models "think" by default, which eats the output budget and truncates
+>   completions — Koyuki disables thinking (`thinkingBudget: 0`) automatically.
+
 ## Quick start
 
 1. Install the extension (see *Build & install locally* below, or *Publishing*).
-2. Run **`Koyuki: Set Claude API Key`** from the Command Palette and paste your
-   key (`sk-ant-...`). Get one at <https://console.anthropic.com/>.
+2. Run **`Koyuki: Select Provider`** → choose **Gemini** (free) or **Claude**,
+   then paste the key when prompted. (Or **`Koyuki: Set API Key`** for the
+   current provider.)
 3. Start typing in any file. Ghost text appears after a short pause — press
    `Tab` to accept.
 4. Select **Koyuki Dark** via *Preferences: Color Theme* if you want the theme.

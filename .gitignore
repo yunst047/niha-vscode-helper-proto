@@ -3,3 +3,4 @@ out/
 *.vsix
 .DS_Store
 .claude/
+examples/**/.claude_bundle.cjs

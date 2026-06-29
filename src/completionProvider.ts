@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { readConfig, getApiKey, promptForApiKey } from "./config";
-import { fetchCompletion } from "./claude";
+import { fetchClaudeCompletion } from "./claude";
+import { fetchGeminiCompletion } from "./gemini";
+import { Provider } from "./prompt";
 import { SoundPlayer } from "./sound";
 
 export class KoyukiCompletionProvider
@@ -8,12 +10,23 @@ export class KoyukiCompletionProvider
 {
   private soundIndex = 0;
   private warnedNoKey = false;
+  private seq = 0;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly sound: SoundPlayer,
-    private readonly output: vscode.OutputChannel
+    private readonly output: vscode.OutputChannel,
+    private readonly status: vscode.StatusBarItem
   ) {}
+
+  private log(msg: string): void {
+    this.output.appendLine(`[${new Date().toLocaleTimeString()}] ${msg}`);
+  }
+
+  private setState(icon: string, text: string, tip?: string): void {
+    this.status.text = `${icon} Koyuki`;
+    this.status.tooltip = tip ?? text;
+  }
 
   async provideInlineCompletionItems(
     document: vscode.TextDocument,
@@ -21,12 +34,14 @@ export class KoyukiCompletionProvider
     _context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken
   ): Promise<vscode.InlineCompletionItem[] | undefined> {
+    const id = ++this.seq;
     const cfg = readConfig();
+
     if (!cfg.enabled) {
+      this.log(`#${id} skip: koyuki.enabled is false`);
+      this.setState("$(circle-slash)", "disabled");
       return undefined;
     }
-
-    // Skip non-file schemes (output panels, scm input, etc.).
     if (document.uri.scheme === "output") {
       return undefined;
     }
@@ -36,21 +51,26 @@ export class KoyukiCompletionProvider
     );
     const recentPrefix = prefixText.slice(-200).replace(/\s/g, "");
     if (recentPrefix.length < cfg.minimumPrefixLength) {
+      this.log(
+        `#${id} skip: prefix too short (${recentPrefix.length} < ${cfg.minimumPrefixLength}) — type a bit more`
+      );
       return undefined;
     }
 
-    const apiKey = await getApiKey(this.context);
+    const apiKey = await getApiKey(this.context, cfg.provider);
     if (!apiKey) {
+      this.log(`#${id} skip: NO API KEY for ${cfg.provider} (run "Koyuki: Set API Key")`);
+      this.setState("$(key)", "no key", `Koyuki: set your ${cfg.provider} API key`);
       if (!this.warnedNoKey) {
         this.warnedNoKey = true;
         void vscode.window
           .showWarningMessage(
-            "Koyuki needs your Claude API key to generate completions.",
+            `Koyuki needs your ${cfg.provider} API key to generate completions.`,
             "Set API Key"
           )
           .then((choice) => {
             if (choice === "Set API Key") {
-              void promptForApiKey(this.context);
+              void promptForApiKey(this.context, cfg.provider);
             }
           });
       }
@@ -58,10 +78,15 @@ export class KoyukiCompletionProvider
     }
     this.warnedNoKey = false;
 
-    // Debounce: wait out the idle window, abort if the user keeps typing
-    // (VS Code cancels the token) or moves on.
+    this.log(
+      `#${id} trigger: ${document.languageId} @ ${position.line + 1}:${
+        position.character + 1
+      } (${cfg.provider}/${cfg.model}, debounce ${cfg.debounceMs}ms)`
+    );
+
     const debounced = await this.debounce(cfg.debounceMs, token);
     if (!debounced || token.isCancellationRequested) {
+      this.log(`#${id} cancelled during debounce (you kept typing — normal)`);
       return undefined;
     }
 
@@ -70,8 +95,12 @@ export class KoyukiCompletionProvider
     const abort = new AbortController();
     const cancelSub = token.onCancellationRequested(() => abort.abort());
 
+    this.setState("$(sync~spin)", "thinking…", `Koyuki is asking ${cfg.provider}…`);
+    const t0 = Date.now();
     try {
-      const completion = await fetchCompletion({
+      const fetchFn =
+        cfg.provider === "gemini" ? fetchGeminiCompletion : fetchClaudeCompletion;
+      const completion = await fetchFn({
         apiKey,
         model: cfg.model,
         maxTokens: cfg.maxTokens,
@@ -82,9 +111,21 @@ export class KoyukiCompletionProvider
         signal: abort.signal,
       });
 
-      if (token.isCancellationRequested || !completion.trim()) {
+      const ms = Date.now() - t0;
+      if (token.isCancellationRequested) {
+        this.log(`#${id} cancelled after fetch (${ms}ms)`);
+        this.setState("$(sparkle)", "idle");
         return undefined;
       }
+      if (!completion.trim()) {
+        this.log(`#${id} empty completion (${ms}ms) — model had nothing to add`);
+        this.setState("$(sparkle)", "idle");
+        return undefined;
+      }
+
+      const preview = completion.replace(/\n/g, "\\n").slice(0, 60);
+      this.log(`#${id} SUGGESTED (${ms}ms, ${completion.length} chars): "${preview}"`);
+      this.setState("$(check)", "suggested", "Koyuki suggested — press Tab");
 
       if (cfg.soundsEnabled) {
         this.sound.play("positive", cfg.soundsVolume, this.soundIndex++);
@@ -97,39 +138,47 @@ export class KoyukiCompletionProvider
       return [item];
     } catch (err: unknown) {
       if (isAbort(err)) {
-        return undefined; // user moved on; not an error
+        this.log(`#${id} aborted (you moved on)`);
+        this.setState("$(sparkle)", "idle");
+        return undefined;
       }
-      this.reportError(err, cfg.soundsEnabled, cfg.soundsVolume);
+      this.reportError(id, err, cfg.provider, cfg.soundsEnabled, cfg.soundsVolume);
       return undefined;
     } finally {
       cancelSub.dispose();
     }
   }
 
-  private reportError(err: unknown, soundsEnabled: boolean, volume: number): void {
+  private reportError(
+    id: number,
+    err: unknown,
+    provider: Provider,
+    soundsEnabled: boolean,
+    volume: number
+  ): void {
+    const status = (err as { status?: number })?.status;
     const message = err instanceof Error ? err.message : String(err);
-    this.output.appendLine(`[${new Date().toISOString()}] completion error: ${message}`);
+    this.log(`#${id} ERROR${status ? ` (HTTP ${status})` : ""}: ${message}`);
+    this.setState("$(error)", "error", `Koyuki error: ${message}`);
 
     if (soundsEnabled) {
       this.sound.play("negative", volume, this.soundIndex++);
     }
 
-    // Surface auth/quota problems to the user; stay quiet on transient blips.
-    const status = (err as { status?: number })?.status;
     if (status === 401 || status === 403) {
       void vscode.window
         .showErrorMessage(
-          "Koyuki: your Claude API key was rejected (401/403). Update it?",
+          `Koyuki: your ${provider} API key was rejected (${status}). Update it?`,
           "Set API Key"
         )
         .then((choice) => {
           if (choice === "Set API Key") {
-            void promptForApiKey(this.context);
+            void promptForApiKey(this.context, provider);
           }
         });
     } else if (status === 429) {
       void vscode.window.setStatusBarMessage(
-        "$(warning) Koyuki: rate limited by Anthropic — slowing down.",
+        `$(warning) Koyuki: rate limited by ${provider} — slowing down.`,
         4000
       );
     }
@@ -165,10 +214,7 @@ function sliceContext(
     new vscode.Range(new vscode.Position(startLine, 0), position)
   );
   const suffix = document.getText(
-    new vscode.Range(
-      position,
-      document.lineAt(endLine).range.end
-    )
+    new vscode.Range(position, document.lineAt(endLine).range.end)
   );
   return { prefix, suffix };
 }

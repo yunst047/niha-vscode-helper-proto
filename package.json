@@ -2,7 +2,7 @@
   "name": "koyuki-complete",
   "displayName": "Koyuki Complete — Claude Inline AI",
   "description": "Copilot-style inline autocomplete powered by your own Claude API key (defaults to low-cost Haiku). Includes the Koyuki color theme and feedback sounds.",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "publisher": "niha",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -34,12 +34,12 @@
     "commands": [
       {
         "command": "koyuki.setApiKey",
-        "title": "Koyuki: Set Claude API Key",
+        "title": "Koyuki: Set API Key (current provider)",
         "category": "Koyuki"
       },
       {
         "command": "koyuki.clearApiKey",
-        "title": "Koyuki: Clear Claude API Key",
+        "title": "Koyuki: Clear API Key (current provider)",
         "category": "Koyuki"
       },
       {
@@ -50,6 +50,16 @@
       {
         "command": "koyuki.triggerCompletion",
         "title": "Koyuki: Trigger Inline Completion Now",
+        "category": "Koyuki"
+      },
+      {
+        "command": "koyuki.showLogs",
+        "title": "Koyuki: Show Logs",
+        "category": "Koyuki"
+      },
+      {
+        "command": "koyuki.selectProvider",
+        "title": "Koyuki: Select Provider (Claude / Gemini)",
         "category": "Koyuki"
       }
     ],
@@ -76,10 +86,25 @@
           "default": true,
           "description": "Enable Koyuki inline (ghost-text) completions."
         },
+        "koyuki.provider": {
+          "type": "string",
+          "enum": ["anthropic", "gemini"],
+          "enumDescriptions": [
+            "Anthropic Claude (needs API credit)",
+            "Google Gemini (has a free tier)"
+          ],
+          "default": "anthropic",
+          "description": "Which AI provider to use for completions. Use 'Koyuki: Select Provider' to switch and set the key."
+        },
         "koyuki.model": {
           "type": "string",
           "default": "claude-haiku-4-5",
-          "markdownDescription": "Claude model id used for completions. Defaults to the low-cost `claude-haiku-4-5`. You can switch to `claude-sonnet-4-6` or `claude-opus-4-8` for higher quality at higher cost."
+          "markdownDescription": "Claude model id (used when provider is `anthropic`). Defaults to low-cost `claude-haiku-4-5`; `claude-sonnet-4-6` / `claude-opus-4-8` cost more."
+        },
+        "koyuki.geminiModel": {
+          "type": "string",
+          "default": "gemini-2.5-flash",
+          "markdownDescription": "Gemini model id (used when provider is `gemini`). `gemini-2.5-flash` is fast and works on the free tier (verified). If you hit `429 limit: 0`, that model has no free-tier quota on your key — try another `*-flash` model. Thinking is auto-disabled for snappy completions."
         },
         "koyuki.maxTokens": {
           "type": "number",
