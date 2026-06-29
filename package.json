@@ -1,0 +1,135 @@
+{
+  "name": "koyuki-complete",
+  "displayName": "Koyuki Complete — Claude Inline AI",
+  "description": "Copilot-style inline autocomplete powered by your own Claude API key (defaults to low-cost Haiku). Includes the Koyuki color theme and feedback sounds.",
+  "version": "0.1.0",
+  "publisher": "niha",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Themes"
+  ],
+  "keywords": [
+    "ai",
+    "autocomplete",
+    "copilot",
+    "claude",
+    "anthropic",
+    "inline completion"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yunst047/niha-vscode-helper-proto.git"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "koyuki.setApiKey",
+        "title": "Koyuki: Set Claude API Key",
+        "category": "Koyuki"
+      },
+      {
+        "command": "koyuki.clearApiKey",
+        "title": "Koyuki: Clear Claude API Key",
+        "category": "Koyuki"
+      },
+      {
+        "command": "koyuki.toggle",
+        "title": "Koyuki: Toggle Inline Completions",
+        "category": "Koyuki"
+      },
+      {
+        "command": "koyuki.triggerCompletion",
+        "title": "Koyuki: Trigger Inline Completion Now",
+        "category": "Koyuki"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "koyuki.triggerCompletion",
+        "key": "ctrl+alt+\\",
+        "mac": "cmd+alt+\\",
+        "when": "editorTextFocus"
+      }
+    ],
+    "themes": [
+      {
+        "label": "Koyuki Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/koyuki-color-theme.json"
+      }
+    ],
+    "configuration": {
+      "title": "Koyuki Complete",
+      "properties": {
+        "koyuki.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Koyuki inline (ghost-text) completions."
+        },
+        "koyuki.model": {
+          "type": "string",
+          "default": "claude-haiku-4-5",
+          "markdownDescription": "Claude model id used for completions. Defaults to the low-cost `claude-haiku-4-5`. You can switch to `claude-sonnet-4-6` or `claude-opus-4-8` for higher quality at higher cost."
+        },
+        "koyuki.maxTokens": {
+          "type": "number",
+          "default": 256,
+          "description": "Maximum tokens to generate per completion. Lower is cheaper and faster."
+        },
+        "koyuki.debounceMs": {
+          "type": "number",
+          "default": 450,
+          "description": "Idle time (ms) after typing before a completion request is sent. Higher values reduce API calls and cost."
+        },
+        "koyuki.maxContextLines": {
+          "type": "number",
+          "default": 80,
+          "description": "Maximum number of lines of code before and after the cursor sent as context."
+        },
+        "koyuki.minimumPrefixLength": {
+          "type": "number",
+          "default": 2,
+          "description": "Do not request completions until at least this many non-whitespace characters precede the cursor on recent lines."
+        },
+        "koyuki.sounds.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a positive ping when a suggestion arrives and an alert sound on errors."
+        },
+        "koyuki.sounds.volume": {
+          "type": "number",
+          "default": 0.4,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Playback volume for feedback sounds (0.0–1.0)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "compile": "node esbuild.js",
+    "package": "npx --yes @vscode/vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.40.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.0"
+  }
+}

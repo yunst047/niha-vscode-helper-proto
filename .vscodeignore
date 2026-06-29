@@ -1,0 +1,18 @@
+# Source & build tooling (bundled output lives in out/)
+src/**
+esbuild.js
+tsconfig.json
+.gitignore
+.github/**
+.claude/**
+**/*.map
+*.vsix
+
+# Dev dependencies are bundled by esbuild; ship nothing from node_modules
+node_modules/**
+
+# Raw image art — only media/icon.png is shipped (see NOTICE.md / fair use)
+public/28-smug.webp
+public/hq720.jpg
+public/niha_virus.jpg
+public/*.jpg
